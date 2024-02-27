@@ -2,15 +2,13 @@
 
 Evo is a small  natural selection simulation program written in Rust . It offers a platform to explore the fascinating dynamics of evolution in a simulated environment.
 
-## Features
+## About
 
 - **Natural Selection Simulation**: Witness the process of natural selection unfold in a dynamic, simulated ecosystem.
-  
-- **Rust Implementation**: Developed entirely in Rust, Evo leverages the language's performance and safety features to provide a robust simulation environment.
 
 - **Inspiration**: Built upon the concepts presented in [this video](https://www.youtube.com/watch?v=N3tRFayqVtk&t=2575s), Evo aims to bring academic research on evolution and natural selection to life in an interactive and accessible way.
 
-- **Graphics Support**: currently using SDL2 for graphics . (Currently working on porting graphics to Bevy.)
+- **Graphics**: currently using SDL2 for graphics . (Currently working on porting graphics to Bevy.)
 
 ## Getting Started
 
