@@ -1,5 +1,3 @@
-Sure, here's an improved version of your README for your natural selection simulator:
-
 # Evo: Natural Selection Simulator
 
 Evo is a small  natural selection simulation program written in Rust . It offers a platform to explore the fascinating dynamics of evolution in a simulated environment.
