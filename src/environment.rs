@@ -1,3 +1,4 @@
+use crate::graphics::Renderer;
 use crate::types::CellIndex;
 use core::fmt;
 use rand::prelude::*;
@@ -14,17 +15,44 @@ impl Organism {
 }
 
 #[derive(Debug)]
-struct State {
+struct State<'a> {
     grid: Grid,
     organisms: Vec<Organism>,
+    //allow intialization without renderer for debugging
+    renderer: Option<&'a mut Renderer>,
 }
 
-impl State {
-    fn new(row_size: usize, column_size: usize) -> Self {
-        return Self {
-            grid: Grid::new(row_size, column_size),
-            organisms: vec![],
+impl<'a> State<'a> {
+    fn new(row_size: usize, column_size: usize, renderer: Option<&'a mut Renderer>) -> Self {
+        match renderer {
+            Some(renderer) => {
+                if (renderer.get_size() == (row_size as u32, column_size as u32)) {
+                    return Self {
+                        grid: Grid::new(row_size, column_size),
+                        organisms: vec![],
+                        renderer: Some(renderer),
+                    };
+                } else {
+                    return Self {
+                        grid: Grid::new(row_size, column_size),
+                        organisms: vec![],
+                        renderer: None,
+                    };
+                }
+            }
+            None => {
+                return Self {
+                    grid: Grid::new(row_size, column_size),
+                    organisms: vec![],
+                    renderer,
+                }
+            }
         };
+        // return Self {
+        //     grid: Grid::new(row_size, column_size),
+        //     organisms: vec![],
+        //     renderer,
+        // };
     }
     fn set_active_update(&mut self, cells: Vec<CellIndex>) {
         self.grid.reset();
@@ -59,7 +87,7 @@ impl State {
     }
 }
 
-impl fmt::Display for State {
+impl<'a> fmt::Display for State<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let grid = &self.grid;
         write!(f, "grid:\n{grid}")
@@ -148,7 +176,7 @@ mod tests {
 
     #[test]
     fn state_initialized() {
-        let mut state = State::new(20, 20);
+        let mut state = State::new(20, 20, None);
         state.set_active_update(vec![(0, 1), (0, 2), (0, 3)]);
         println!("{}", state);
     }
@@ -156,7 +184,7 @@ mod tests {
     #[test]
     fn test_random_init() {
         for i in 0..10 {
-            let mut state = State::new(20, 20);
+            let mut state = State::new(20, 20, None);
             state.initialize_organisms_random(200);
             println!("{}", state);
         }

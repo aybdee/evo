@@ -1,3 +1,5 @@
+use core::fmt;
+
 use sdl2::{
     pixels::Color,
     rect::{Point, Rect},
@@ -8,6 +10,14 @@ use sdl2::{
 pub struct Renderer {
     pub canvas: WindowCanvas,
     pub point_size: u32,
+}
+
+impl fmt::Debug for Renderer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Renderer")
+            .field("point_size", &self.point_size)
+            .finish()
+    }
 }
 
 impl Renderer {
@@ -39,17 +49,9 @@ impl Renderer {
             .draw_rect(Rect::new(point.x(), point.y(), width, height))
     }
 
-    // pub fn draw(&mut self) -> Result<(), String> {
-    //     self.canvas.clear();
-    //
-    //     self.draw_dot(&Point::new(3, 3), Color::RED)?;
-    //     self.draw_rect(&Point::new(3, 1), 200, 300, Color::BLACK)?;
-    //
-    //     // self.canvas.present();
-    //     // self.canvas.clear();
-    //
-    //     Ok(())
-    // }
+    pub fn get_size(&self) -> (u32, u32) {
+        self.canvas.window().size()
+    }
     pub fn clear(&mut self) {
         self.canvas.clear();
     }

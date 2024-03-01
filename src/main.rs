@@ -1,3 +1,4 @@
+mod environment;
 mod graphics;
 mod types;
 
@@ -6,8 +7,7 @@ use graphics::Renderer;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
-use sdl2::rect::{Point, Rect};
-use sdl2::render::TextureQuery;
+use sdl2::rect::Point;
 
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
