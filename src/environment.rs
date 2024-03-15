@@ -2,10 +2,25 @@ use crate::graphics::Renderer;
 use crate::types::CellIndex;
 use core::fmt;
 use rand::prelude::*;
+use sdl2::pixels::Color;
+use sdl2::rect::Point;
+use std::collections::HashMap;
+
+macro_rules! to_cellindex {
+    ($position:ident) => {
+        ($position.x() as usize, $position.y() as usize)
+    };
+}
+
+macro_rules! to_point {
+    ($x:ident,$y:ident) => {
+        ($position.x() as usize, $position.y() as usize)
+    };
+}
 
 #[derive(Debug)]
-struct Organism {
-    position: CellIndex,
+pub struct Organism {
+    pub position: CellIndex,
 }
 
 impl Organism {
@@ -15,75 +30,115 @@ impl Organism {
 }
 
 #[derive(Debug)]
-struct State<'a> {
-    grid: Grid,
-    organisms: Vec<Organism>,
+pub struct State<'a> {
+    pub grid: Grid,
+    pub organisms: HashMap<u32, Organism>,
     //allow intialization without renderer for debugging
-    renderer: Option<&'a mut Renderer>,
+    pub renderer: Option<&'a mut Renderer>,
+    pub ids: Vec<u32>,
+}
+
+impl<'a> Default for State<'a> {
+    fn default() -> Self {
+        return Self {
+            grid: Grid::new(0, 0),
+            organisms: HashMap::default(),
+            renderer: None,
+            ids: vec![],
+        };
+    }
 }
 
 impl<'a> State<'a> {
-    fn new(row_size: usize, column_size: usize, renderer: Option<&'a mut Renderer>) -> Self {
+    pub fn new(row_size: usize, column_size: usize, renderer: Option<&'a mut Renderer>) -> Self {
         match renderer {
             Some(renderer) => {
-                if (renderer.get_size() == (row_size as u32, column_size as u32)) {
+                if renderer.get_size()
+                    == (
+                        (column_size as u32) * renderer.point_size,
+                        (row_size as u32) * renderer.point_size,
+                    )
+                {
                     return Self {
                         grid: Grid::new(row_size, column_size),
-                        organisms: vec![],
+                        organisms: HashMap::default(),
                         renderer: Some(renderer),
+                        ids: vec![],
                     };
                 } else {
                     return Self {
                         grid: Grid::new(row_size, column_size),
-                        organisms: vec![],
-                        renderer: None,
+                        ..Default::default()
                     };
                 }
             }
             None => {
                 return Self {
                     grid: Grid::new(row_size, column_size),
-                    organisms: vec![],
-                    renderer,
+                    ..Default::default()
                 }
             }
         };
-        // return Self {
-        //     grid: Grid::new(row_size, column_size),
-        //     organisms: vec![],
-        //     renderer,
-        // };
     }
-    fn set_active_update(&mut self, cells: Vec<CellIndex>) {
-        self.grid.reset();
-        for cell in cells.into_iter() {
-            self.grid.set_cell_active(cell)
+
+    pub fn assign_id(&mut self) -> u32 {
+        //just count upwards for now
+        //start from 1
+        let next_id = self.ids.last().unwrap_or(&(1 as u32)) + 1;
+        self.ids.push(next_id);
+        return next_id;
+    }
+
+    pub fn move_organism(&mut self, id: u32, position: CellIndex) -> Result<(), String> {
+        match self.organisms.get_mut(&id) {
+            Some(organism) => {
+                self.grid.set_cell(position, id);
+                organism.position = position;
+                Ok(())
+            }
+            None => Err(String::from("id does not exist")),
         }
     }
 
-    fn set_inactive_update(&mut self, cells: Vec<CellIndex>) {
-        self.grid.reset();
-        for cell in cells.into_iter() {
-            self.grid.set_cell_inactive(cell)
-        }
+    pub fn initialize_organism(&mut self, position: CellIndex) {
+        let (x, y) = position;
+        let id = self.assign_id();
+        let organism = Organism::new((x, y));
+        self.organisms.insert(id, organism);
+        self.grid.set_cell((x, y), id)
     }
 
-    fn initialize_organisms_random(&mut self, num_organisms: usize) {
+    pub fn initialize_organisms_random(&mut self, num_organisms: usize) {
+        self.grid.reset();
         let mut rng = rand::thread_rng();
         let mut organism_position_set: Vec<usize> =
             (0..(self.grid.num_rows * self.grid.num_cols)).collect();
         organism_position_set.shuffle(&mut rng);
-        let organism_positions: Vec<(usize, usize)> = organism_position_set[..num_organisms]
-            .iter()
-            .map(|position| {
-                let (x, y) = (position % self.grid.num_cols, position / self.grid.num_cols);
-                let organisms = Organism::new((x, y));
-                self.organisms.push(organisms);
-                (x, y)
-            })
-            .collect();
+        for index in organism_position_set[..num_organisms].iter() {
+            let position = (index % self.grid.num_rows, index / self.grid.num_rows);
+            self.initialize_organism(position);
+        }
+    }
 
-        self.set_active_update(organism_positions);
+    pub fn num_organisms(&self) -> usize {
+        return self.grid.num_set();
+    }
+
+    pub fn display(&mut self) -> Result<(), String> {
+        //check to see if renderer is attached
+        match &mut self.renderer {
+            Some(renderer) => {
+                renderer.clear();
+                for organism_index in self.organisms.iter() {
+                    let (x, y) = organism_index.1.position;
+                    println!("{} {}", x, y);
+                    renderer.draw_dot(Point::new(x as i32, y as i32), Color::RED)?;
+                }
+                renderer.present();
+                Ok(())
+            }
+            None => Err(String::from("renderer not attached")),
+        }
     }
 }
 
@@ -109,7 +164,7 @@ impl fmt::Display for Grid {
             .map(|x| {
                 let row: String = x
                     .iter()
-                    .map(|cell| (cell.active as u8).to_string())
+                    .map(|cell| (cell.value).to_string() + " ")
                     .collect();
                 format!("{row} \n")
             })
@@ -119,7 +174,7 @@ impl fmt::Display for Grid {
 }
 
 impl Grid {
-    fn new(row_size: usize, column_size: usize) -> Self {
+    pub fn new(row_size: usize, column_size: usize) -> Self {
         return Self {
             cells: vec![vec![Cell::default(); column_size]; row_size],
             num_rows: row_size,
@@ -127,46 +182,81 @@ impl Grid {
         };
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.cells = vec![vec![Cell::default(); self.cells[0].len()]; self.cells.len()]
     }
-    fn toggle_cell(&mut self, index: CellIndex) {
-        self.cells[index.0][index.1].active = !(self.cells[index.0][index.1].active);
+
+    pub fn set_cell(&mut self, index: CellIndex, id: u32) {
+        self.cells[index.0][index.1].set(id);
     }
 
-    fn set_cell_active(&mut self, index: CellIndex) {
-        self.cells[index.0][index.1].active = true;
+    pub fn unset_cell(&mut self, index: CellIndex) {
+        self.cells[index.0][index.1].unset();
     }
 
-    fn set_cell_inactive(&mut self, index: CellIndex) {
-        self.cells[index.0][index.1].active = false;
+    pub fn set_cells(&mut self, updates: Vec<(CellIndex, u32)>) {
+        for (cell, id) in updates.into_iter() {
+            self.set_cell(cell, id)
+        }
+    }
+
+    pub fn unset_cells(&mut self, cells: Vec<CellIndex>) {
+        for cell in cells.into_iter() {
+            self.unset_cell(cell)
+        }
+    }
+
+    pub fn shape(&self) -> (usize, usize) {
+        //use direct vector length
+        if self.cells.len() != 0 {
+            return (self.cells.len(), self.cells[0].len());
+        } else {
+            return (0, 0);
+        }
+    }
+
+    pub fn is_set(&self, index: CellIndex) -> bool {
+        if (self.cells[index.0][index.1].value == 0) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    pub fn num_set(&self) -> usize {
+        let mut num_set_cells = 0;
+        for row in self.cells.iter() {
+            for cell in row {
+                if cell.value != 0 {
+                    num_set_cells += 1;
+                }
+            }
+        }
+        return num_set_cells;
     }
 }
 
 #[derive(Clone, Debug)]
 struct Cell {
-    active: bool,
+    value: u32,
 }
 impl Default for Cell {
     fn default() -> Self {
-        Cell { active: false }
+        Cell { value: 0 }
     }
 }
 
 impl Cell {
-    fn new(active: bool) -> Self {
-        Cell { active }
-    }
-    fn toggle(&mut self) {
-        self.active = !(self.active);
+    fn new(value: u32) -> Self {
+        Cell { value }
     }
 
-    fn set_active(&mut self) {
-        self.active = true;
+    fn set(&mut self, id: u32) {
+        self.value = id;
     }
 
-    fn set_inactive(&mut self) {
-        self.active = false;
+    fn unset(&mut self) {
+        self.value = 0;
     }
 }
 
@@ -175,18 +265,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn state_initialized() {
-        let mut state = State::new(20, 20, None);
-        state.set_active_update(vec![(0, 1), (0, 2), (0, 3)]);
-        println!("{}", state);
+    fn test_random_init() {
+        for i in 1..10 {
+            let mut state = State::new(i, i, None);
+            state.initialize_organisms_random((i * i) - 1);
+            println!("{}", state);
+            assert!(state.grid.shape() == (i, i));
+            assert!(state.num_organisms() == i * i - 1);
+        }
     }
 
     #[test]
-    fn test_random_init() {
-        for i in 0..10 {
-            let mut state = State::new(20, 20, None);
-            state.initialize_organisms_random(200);
-            println!("{}", state);
-        }
+    fn test_random_init_rect() {
+        let mut state = State::new(200, 500, None);
+        state.initialize_organisms_random(200);
+        assert!(state.grid.shape() == (200, 500));
+        assert!(state.num_organisms() == 200);
     }
 }

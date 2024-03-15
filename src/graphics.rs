@@ -27,7 +27,7 @@ impl Renderer {
         return Ok(Renderer { canvas, point_size });
     }
 
-    pub fn draw_dot(&mut self, point: &Point, color: Color) -> Result<(), String> {
+    pub fn draw_dot(&mut self, point: Point, color: Color) -> Result<(), String> {
         self.canvas.set_draw_color(color);
         self.canvas.fill_rect(Rect::new(
             point.x() * (self.point_size as i32),
@@ -39,7 +39,7 @@ impl Renderer {
 
     pub fn draw_rect(
         &mut self,
-        point: &Point,
+        point: Point,
         width: u32,
         height: u32,
         color: Color,
