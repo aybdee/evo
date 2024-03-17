@@ -34,7 +34,9 @@ impl Renderer {
             point.y() * (self.point_size as i32),
             self.point_size,
             self.point_size,
-        ))
+        ))?;
+
+        Ok(())
     }
 
     pub fn draw_rect(
@@ -53,6 +55,7 @@ impl Renderer {
         self.canvas.window().size()
     }
     pub fn clear(&mut self) {
+        self.canvas.set_draw_color(Color::WHITE);
         self.canvas.clear();
     }
     pub fn present(&mut self) {

@@ -6,26 +6,27 @@ use sdl2::pixels::Color;
 use sdl2::rect::Point;
 use std::collections::HashMap;
 
-macro_rules! to_cellindex {
-    ($position:ident) => {
-        ($position.x() as usize, $position.y() as usize)
-    };
-}
-
-macro_rules! to_point {
-    ($x:ident,$y:ident) => {
-        ($position.x() as usize, $position.y() as usize)
-    };
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Organism {
     pub position: CellIndex,
+}
+
+enum MoveAction {
+    Forward,
+    Backward,
+    Up,
+    Down,
+}
+enum Action {
+    Move(MoveAction),
 }
 
 impl Organism {
     fn new(position: CellIndex) -> Self {
         Organism { position }
+    }
+    fn get_action(&self) -> Vec<Action> {
+        return vec![Action::Move(MoveAction::Forward)];
     }
 }
 
@@ -55,26 +56,26 @@ impl<'a> State<'a> {
             Some(renderer) => {
                 if renderer.get_size()
                     == (
-                        (column_size as u32) * renderer.point_size,
-                        (row_size as u32) * renderer.point_size,
+                        (column_size as u32) * (renderer.point_size),
+                        (row_size as u32) * (renderer.point_size),
                     )
                 {
                     return Self {
-                        grid: Grid::new(row_size, column_size),
+                        grid: Grid::new(column_size, row_size),
                         organisms: HashMap::default(),
                         renderer: Some(renderer),
                         ids: vec![],
                     };
                 } else {
                     return Self {
-                        grid: Grid::new(row_size, column_size),
+                        grid: Grid::new(column_size, row_size),
                         ..Default::default()
                     };
                 }
             }
             None => {
                 return Self {
-                    grid: Grid::new(row_size, column_size),
+                    grid: Grid::new(column_size, row_size),
                     ..Default::default()
                 }
             }
@@ -115,7 +116,7 @@ impl<'a> State<'a> {
             (0..(self.grid.num_rows * self.grid.num_cols)).collect();
         organism_position_set.shuffle(&mut rng);
         for index in organism_position_set[..num_organisms].iter() {
-            let position = (index % self.grid.num_rows, index / self.grid.num_rows);
+            let position = (index % self.grid.num_rows, (index / self.grid.num_rows));
             self.initialize_organism(position);
         }
     }
@@ -140,6 +141,37 @@ impl<'a> State<'a> {
             None => Err(String::from("renderer not attached")),
         }
     }
+
+    pub fn clear_display(&mut self) -> Result<(), String> {
+        //check to see if renderer is attached
+        match &mut self.renderer {
+            Some(renderer) => {
+                renderer.clear();
+                Ok(())
+            }
+            None => Err(String::from("renderer not attached")),
+        }
+    }
+
+    pub fn step(&mut self) {
+        for (id, organism) in self.organisms.clone().iter() {
+            let actions = organism.get_action();
+            for action in actions.iter() {
+                match action {
+                    //todo! switch this to if let
+                    Action::Move(motion) => match motion {
+                        MoveAction::Forward => {
+                            let (x, y) = organism.position;
+                            if x < self.grid.shape().0 - 1 {
+                                self.move_organism(*id, (x + 1, y)).unwrap();
+                            }
+                        }
+                        _ => {}
+                    },
+                }
+            }
+        }
+    }
 }
 
 impl<'a> fmt::Display for State<'a> {
@@ -150,7 +182,7 @@ impl<'a> fmt::Display for State<'a> {
 }
 
 #[derive(Debug)]
-struct Grid {
+pub struct Grid {
     cells: Vec<Vec<Cell>>,
     num_rows: usize,
     num_cols: usize,
