@@ -1,5 +1,5 @@
 use crate::graphics::Renderer;
-use crate::types::CellIndex;
+use crate::grid::{CellIndex, Grid, SeekOrientation};
 use core::fmt;
 use rand::prelude::*;
 use sdl2::pixels::Color;
@@ -9,24 +9,48 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Organism {
     pub position: CellIndex,
+    pub color: Color,
 }
-
-enum MoveAction {
+#[derive(Clone)]
+pub enum MoveAction {
     Forward,
     Backward,
     Up,
     Down,
 }
-enum Action {
+
+#[derive(Clone)]
+pub enum Action {
     Move(MoveAction),
+    InPlace,
 }
 
 impl Organism {
     fn new(position: CellIndex) -> Self {
-        Organism { position }
+        let mut rng = rand::thread_rng();
+        Organism {
+            position,
+            color: Color {
+                r: rng.gen_range(0..=255),
+                g: rng.gen_range(0..=255),
+                b: rng.gen_range(0..=255),
+                a: 255,
+            },
+        }
     }
-    fn get_action(&self) -> Vec<Action> {
-        return vec![Action::Move(MoveAction::Forward)];
+    fn get_action(&self) -> Action {
+        let mut rng = rand::thread_rng();
+        let random_number: u8 = rng.gen_range(0..=4);
+        return Action::Move(MoveAction::Forward);
+        // if random_number == 0 {
+        //     return Action::Move(MoveAction::Down);
+        // } else if random_number == 1 {
+        //     return Action::Move(MoveAction::Up);
+        // } else if random_number == 2 {
+        //     return Action::Move(MoveAction::Forward);
+        // } else {
+        //     return Action::Move(MoveAction::Backward);
+        // }
     }
 }
 
@@ -90,7 +114,7 @@ impl<'a> State<'a> {
         return next_id;
     }
 
-    pub fn move_organism(&mut self, id: u32, position: CellIndex) -> Result<(), String> {
+    pub fn change_organism_position(&mut self, id: u32, position: CellIndex) -> Result<(), String> {
         match self.organisms.get_mut(&id) {
             Some(organism) => {
                 self.grid.set_cell(position, id);
@@ -110,7 +134,6 @@ impl<'a> State<'a> {
     }
 
     pub fn initialize_organisms_random(&mut self, num_organisms: usize) {
-        self.grid.reset();
         let mut rng = rand::thread_rng();
         let mut organism_position_set: Vec<usize> =
             (0..(self.grid.num_rows * self.grid.num_cols)).collect();
@@ -127,13 +150,13 @@ impl<'a> State<'a> {
 
     pub fn display(&mut self) -> Result<(), String> {
         //check to see if renderer is attached
+        let mut rng = rand::thread_rng();
         match &mut self.renderer {
             Some(renderer) => {
                 renderer.clear();
-                for organism_index in self.organisms.iter() {
-                    let (x, y) = organism_index.1.position;
-                    println!("{} {}", x, y);
-                    renderer.draw_dot(Point::new(x as i32, y as i32), Color::RED)?;
+                for organism_entry in self.organisms.iter() {
+                    let (x, y) = organism_entry.1.position;
+                    renderer.draw_dot(Point::new(x as i32, y as i32), organism_entry.1.color)?;
                 }
                 renderer.present();
                 Ok(())
@@ -153,23 +176,120 @@ impl<'a> State<'a> {
         }
     }
 
-    pub fn step(&mut self) {
-        for (id, organism) in self.organisms.clone().iter() {
-            let actions = organism.get_action();
-            for action in actions.iter() {
-                match action {
-                    //todo! switch this to if let
-                    Action::Move(motion) => match motion {
-                        MoveAction::Forward => {
-                            let (x, y) = organism.position;
-                            if x < self.grid.shape().0 - 1 {
-                                self.move_organism(*id, (x + 1, y)).unwrap();
-                            }
-                        }
-                        _ => {}
-                    },
+    pub fn handle_move(&mut self, organism_entry: (u32, Organism), motion: MoveAction) {
+        let (id, organism) = organism_entry;
+        match motion {
+            MoveAction::Forward => {
+                let (x, y) = organism.position;
+                self.change_organism_position(id, (x + 1, y)).unwrap();
+            }
+            MoveAction::Backward => {
+                let (x, y) = organism.position;
+                self.change_organism_position(id, (x - 1, y)).unwrap();
+            }
+            MoveAction::Down => {
+                let (x, y) = organism.position;
+                self.change_organism_position(id, (x, y + 1)).unwrap();
+            }
+            MoveAction::Up => {
+                let (x, y) = organism.position;
+                self.change_organism_position(id, (x, y - 1)).unwrap();
+            }
+        }
+    }
+
+    pub fn handle_inplace(&mut self, organism_entry: (u32, Organism)) {
+        let (id, organism) = organism_entry;
+        //keep same position
+        //necessary because grid resets
+        self.change_organism_position(id, organism.position)
+            .unwrap();
+    }
+
+    pub fn handle_action(&mut self, organism_entry: (u32, Organism), action: Action) {
+        match action {
+            Action::Move(motion) => self.handle_move(organism_entry, motion),
+            Action::InPlace => self.handle_inplace(organism_entry),
+        }
+    }
+
+    pub fn validate_move(&self, organism_entry: (u32, Organism), motion: MoveAction) -> bool {
+        let (id, organism) = organism_entry;
+        match motion {
+            MoveAction::Forward => {
+                let (x, y) = organism.position;
+                if x < self.grid.shape().0 - 1
+                    && self
+                        .grid
+                        .seek_zero(organism.position, SeekOrientation::PosX)
+                {
+                    return true;
                 }
             }
+            MoveAction::Backward => {
+                let (x, y) = organism.position;
+                if x > 0
+                    && self
+                        .grid
+                        .seek_zero(organism.position, SeekOrientation::NegX)
+                {
+                    return true;
+                }
+            }
+
+            MoveAction::Up => {
+                let (x, y) = organism.position;
+                if y > 0
+                    && self
+                        .grid
+                        .seek_zero(organism.position, SeekOrientation::NegY)
+                {
+                    return true;
+                }
+            }
+
+            MoveAction::Down => {
+                let (x, y) = organism.position;
+                if y < self.grid.shape().1 - 1
+                    && self
+                        .grid
+                        .seek_zero(organism.position, SeekOrientation::PosY)
+                {
+                    // self.change_organism_position(id, (x, y + 1)).unwrap();
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    pub fn validate_action(&self, organism_entry: (u32, Organism), action: Action) -> bool {
+        match action {
+            Action::Move(motion) => return self.validate_move(organism_entry, motion),
+            Action::InPlace => {
+                return true;
+            }
+        }
+    }
+
+    pub fn step(&mut self) {
+        let valid_action_pairs: Vec<((u32, Organism), Action)> = self
+            .organisms
+            .clone()
+            .into_iter()
+            .map(|organism_entry| (organism_entry.clone(), organism_entry.1.get_action()))
+            .map(|action_pair| {
+                if self.validate_action(action_pair.0.clone(), action_pair.1.clone()) {
+                    action_pair
+                } else {
+                    (action_pair.0.clone(), Action::InPlace)
+                }
+            })
+            .collect();
+
+        self.grid.reset();
+        for (organism_entry, action) in valid_action_pairs.into_iter() {
+            self.handle_action(organism_entry, action);
         }
     }
 }
@@ -178,117 +298,6 @@ impl<'a> fmt::Display for State<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let grid = &self.grid;
         write!(f, "grid:\n{grid}")
-    }
-}
-
-#[derive(Debug)]
-pub struct Grid {
-    cells: Vec<Vec<Cell>>,
-    num_rows: usize,
-    num_cols: usize,
-}
-
-impl fmt::Display for Grid {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let grid_display: String = self
-            .cells
-            .iter()
-            .map(|x| {
-                let row: String = x
-                    .iter()
-                    .map(|cell| (cell.value).to_string() + " ")
-                    .collect();
-                format!("{row} \n")
-            })
-            .collect();
-        write!(f, "{grid_display}")
-    }
-}
-
-impl Grid {
-    pub fn new(row_size: usize, column_size: usize) -> Self {
-        return Self {
-            cells: vec![vec![Cell::default(); column_size]; row_size],
-            num_rows: row_size,
-            num_cols: column_size,
-        };
-    }
-
-    pub fn reset(&mut self) {
-        self.cells = vec![vec![Cell::default(); self.cells[0].len()]; self.cells.len()]
-    }
-
-    pub fn set_cell(&mut self, index: CellIndex, id: u32) {
-        self.cells[index.0][index.1].set(id);
-    }
-
-    pub fn unset_cell(&mut self, index: CellIndex) {
-        self.cells[index.0][index.1].unset();
-    }
-
-    pub fn set_cells(&mut self, updates: Vec<(CellIndex, u32)>) {
-        for (cell, id) in updates.into_iter() {
-            self.set_cell(cell, id)
-        }
-    }
-
-    pub fn unset_cells(&mut self, cells: Vec<CellIndex>) {
-        for cell in cells.into_iter() {
-            self.unset_cell(cell)
-        }
-    }
-
-    pub fn shape(&self) -> (usize, usize) {
-        //use direct vector length
-        if self.cells.len() != 0 {
-            return (self.cells.len(), self.cells[0].len());
-        } else {
-            return (0, 0);
-        }
-    }
-
-    pub fn is_set(&self, index: CellIndex) -> bool {
-        if (self.cells[index.0][index.1].value == 0) {
-            return false;
-        } else {
-            return true;
-        }
-    }
-
-    pub fn num_set(&self) -> usize {
-        let mut num_set_cells = 0;
-        for row in self.cells.iter() {
-            for cell in row {
-                if cell.value != 0 {
-                    num_set_cells += 1;
-                }
-            }
-        }
-        return num_set_cells;
-    }
-}
-
-#[derive(Clone, Debug)]
-struct Cell {
-    value: u32,
-}
-impl Default for Cell {
-    fn default() -> Self {
-        Cell { value: 0 }
-    }
-}
-
-impl Cell {
-    fn new(value: u32) -> Self {
-        Cell { value }
-    }
-
-    fn set(&mut self, id: u32) {
-        self.value = id;
-    }
-
-    fn unset(&mut self) {
-        self.value = 0;
     }
 }
 

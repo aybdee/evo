@@ -1,6 +1,6 @@
 mod environment;
 mod graphics;
-mod types;
+mod grid;
 
 extern crate sdl2;
 use std::thread::sleep;
@@ -15,7 +15,7 @@ use sdl2::rect::Point;
 
 const SCREEN_WIDTH: u32 = 800; //num columns(x)
 const SCREEN_HEIGHT: u32 = 600; //num rows(y)
-const FPS: u64 = 5;
+const FPS: u64 = 8;
 const SPF: u64 = (1 / FPS) * 1000;
 //
 macro_rules! to_cellindex {
@@ -53,15 +53,7 @@ pub fn main() -> Result<(), String> {
 
     environment.initialize_organisms_random(800);
 
-    // environment.initialize_organism((0, 0));
     //simulate for 500 timesteps
-    println!("{:?}", environment.grid.shape());
-    for i in 1..200 {
-        environment.display()?;
-        sleep(Duration::from_millis(32));
-        environment.step();
-    }
-
     // renderer.draw_rect(Point::new(3, 3), 750, 550, Color::BLACK)?;
 
     // let ttf_context = sdl2::ttf::init().map_err(|e| e.to_string())?;
@@ -86,6 +78,10 @@ pub fn main() -> Result<(), String> {
                 _ => {}
             }
         }
+
+        environment.display()?;
+        sleep(Duration::from_millis(32));
+        environment.step();
     }
 
     Ok(())
